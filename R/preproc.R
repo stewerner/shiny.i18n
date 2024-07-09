@@ -10,18 +10,19 @@
 extract_key_expressions <- function(str, handle = "i18n") {
   found <- stri_remove_empty_na(stri_extract_all_regex(
     str,
-    glue::glue(
+    pattern = glue::glue(
       "{handle}\\$t\\(([\"']).*?\\1\\)|{handle}\\$translate\\(([\"']).*?\\2\\)"
-    )
+    ),
+    simplify = TRUE
   ))
   stri_unique(stri_replace_all_regex(
-    found,
-    c(
+    str = found,
+    pattern = c(
       glue::glue("{handle}\\$t\\([\"']"),
       glue::glue("{handle}\\$translate\\([\"']"),
       "[\"']\\)$"
     ),
-    c("", "", ""),
+    replacement = c("", "", ""),
     vectorize_all = FALSE
   ))
 }
