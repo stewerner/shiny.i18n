@@ -11,7 +11,7 @@ extract_key_expressions <- function(str, handle = "i18n") {
   found <- stri_remove_empty_na(stri_extract_all_regex(
     str,
     pattern = glue::glue(
-      "{handle}\\$t\\(([\"']).*?\\1\\)|{handle}\\$translate\\(([\"']).*?\\2\\)"
+      "{handle}\\$t\\(([\"'])(?s).*?\\1\\)|{handle}\\$translate\\(([\"'])(?s).*?\\2\\)"
     ),
     simplify = TRUE
   ))
