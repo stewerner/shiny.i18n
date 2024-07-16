@@ -20,9 +20,11 @@ extract_key_expressions <- function(str, handle = "i18n") {
     pattern = c(
       glue::glue("{handle}\\$t\\([\"']"),
       glue::glue("{handle}\\$translate\\([\"']"),
-      "[\"']\\)$"
+      "[\"']\\)$",
+      "\\\\r",
+      "\\\\n"
     ),
-    replacement = c("", "", ""),
+    replacement = c("", "", "", "\r", "\n"),
     vectorize_all = FALSE
   ))
 }
