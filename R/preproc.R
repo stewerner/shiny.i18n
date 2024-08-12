@@ -15,18 +15,20 @@ extract_key_expressions <- function(str, handle = "i18n") {
     ),
     simplify = TRUE
   ))
-  stri_unique(stri_replace_all_regex(
-    str = found,
-    pattern = c(
-      glue::glue("{handle}\\$t\\([\"']"),
-      glue::glue("{handle}\\$translate\\([\"']"),
-      "[\"']\\)$",
-      "\\\\r",
-      "\\\\n"
-    ),
-    replacement = c("", "", "", "\r", "\n"),
-    vectorize_all = FALSE
-  ))
+  stri_unique(
+    stri_replace_all_regex(
+      str = found,
+      pattern = c(
+        glue::glue("{handle}\\$t\\([\"']"),
+        glue::glue("{handle}\\$translate\\([\"']"),
+        "[\"']\\)$",
+        "\\\\r",
+        "\\\\n"
+      ),
+      replacement = c("", "", "", "\r", "\n"),
+      vectorize_all = FALSE
+    )
+  )
 }
 
 #' Transform key_expressions to data.table and merge with previously existing translations
@@ -38,18 +40,20 @@ extract_key_expressions <- function(str, handle = "i18n") {
 #' or "csv"
 #' @param key_language character specifying the language key code of the key_expressions
 #' @param translated_languages character vector specifying the key codes of the translated languages
+#' @param placeholder character specifying a placeholder for otherwise empty values of translated_languages
 #' @param update logical. If TRUE, the output updates the existing translation file. If FALSE, any existing file of the name is overwritten.
 #' @import stats
 #' @import data.table
 #' @importFrom jsonlite read_json
 #' @keywords internal
 prepare_translation_table <- function(key_expressions,
-                         output_path = NULL,
-                         type = "json",
-                         key_language = "key",
-                         translated_languages = c("language_code_1", "language_code_2"),
-                         update = TRUE) {
-  ..keep_translated_languages <- ..write_columns <- `..`  <- `.` <- NULL # avoid NOTE "no visible binding for global variable"
+                                      output_path = NULL,
+                                      type = "json",
+                                      key_language = "key",
+                                      translated_languages = c("language_code_1", "language_code_2"),
+                                      placeholder = "",
+                                      update = TRUE) {
+  # ..keep_translated_languages <- ..write_columns <- `..`  <- `.` <- NULL # avoid NOTE "no visible binding for global variable"
   extracted_translation_table <- data.table(key_expressions)
   names(extracted_translation_table) <- key_language
 
@@ -57,47 +61,86 @@ prepare_translation_table <- function(key_expressions,
     if (update && file.exists(output_path)) {
       old_translation_list <- jsonlite::read_json(output_path, simplifyVector = TRUE)
       old_translation_table <- old_translation_list$translation
-      if (is.data.frame(old_translation_table)) {setDT(old_translation_table)}
+      if (is.data.frame(old_translation_table)) {
+        setDT(old_translation_table)
+      }
 
       new_translated_languages <- setdiff(translated_languages, names(old_translation_table))
-      extracted_translation_table[, (new_translated_languages) := .("")]
-      if (is.data.table(old_translation_table) && key_language %in% names(old_translation_table)) {
-        keep_translated_languages <- c(key_language, setdiff(names(old_translation_table), names(extracted_translation_table)))
+      extracted_translation_table[, (new_translated_languages) := .(placeholder)]
+      if (is.data.table(old_translation_table) &&
+          key_language %in% names(old_translation_table)) {
+        keep_translated_languages <- c(key_language, setdiff(
+          names(old_translation_table),
+          names(extracted_translation_table)
+        ))
         # check for intersections
         extracted_translation_table <- old_translation_table[, ..keep_translated_languages][extracted_translation_table, on = key_language]
         # merge extracted and previously existing translation tables
-        extracted_translation_table <- rbind(old_translation_table[!extracted_translation_table, on = key_language], extracted_translation_table, use.names = TRUE, fill = TRUE)
+        extracted_translation_table <- rbind(
+          old_translation_table[!extracted_translation_table, on = key_language],
+          extracted_translation_table,
+          use.names = TRUE,
+          fill = TRUE
+        )
       }
     } else {
-      extracted_translation_table[, (translated_languages) := .("")]
+      extracted_translation_table[, (translated_languages) := .(placeholder)]
     }
   }
 
   if (type == "csv") {
-    target_csv_files <- file.path(output_path, paste0("translation_", translated_languages, ".csv"))
+    target_csv_files <- file.path(output_path,
+                                  paste0("translation_", translated_languages, ".csv"))
     if (update && any(file.exists(target_csv_files))) {
-      old_translation_tables <- lapply(target_csv_files, function(target_csv_file){fread(target_csv_file, colClasses="character")})
-      old_translation_tables <- setNames(old_translation_tables, sapply(old_translation_tables, function(x){names(x)[2L]}))
-      old_translation_table <- rbindlist(old_translation_tables, use.names = FALSE, fill = FALSE, idcol = "language_code")
-      old_translation_table <- dcast.data.table(old_translation_table, key ~ language_code, value.var = setdiff(names(old_translation_table), c("key", "language_code")))
+      old_translation_tables <- lapply(target_csv_files, function(target_csv_file) {
+        fread(target_csv_file, colClasses = "character")
+      })
+      old_translation_tables <- setNames(old_translation_tables,
+                                         sapply(old_translation_tables, function(x) {
+                                           names(x)[2L]
+                                         }))
+      old_translation_table <- rbindlist(
+        old_translation_tables,
+        use.names = FALSE,
+        fill = FALSE,
+        idcol = "language_code"
+      )
+      old_translation_table <- dcast.data.table(old_translation_table,
+                                                key ~ language_code,
+                                                value.var = setdiff(
+                                                  names(old_translation_table),
+                                                  c("key", "language_code")
+                                                ))
 
       new_translated_languages <- setdiff(translated_languages, names(old_translation_table))
-      extracted_translation_table[, (new_translated_languages) := .("")]
-      if (is.data.table(old_translation_table) && key_language %in% names(old_translation_table)) {
-        keep_translated_languages <- c(key_language, setdiff(names(old_translation_table), names(extracted_translation_table)))
+      extracted_translation_table[, (new_translated_languages) := .(placeholder)]
+      if (is.data.table(old_translation_table) &&
+          key_language %in% names(old_translation_table)) {
+        keep_translated_languages <- c(key_language, setdiff(
+          names(old_translation_table),
+          names(extracted_translation_table)
+        ))
         # check for intersections
         extracted_translation_table <- old_translation_table[, ..keep_translated_languages][extracted_translation_table, on = key_language]
         # merge extracted and previously existing translation tables
-        extracted_translation_table <- rbind(old_translation_table[!extracted_translation_table, on = key_language], extracted_translation_table, use.names = TRUE, fill = TRUE)
+        extracted_translation_table <- rbind(
+          old_translation_table[!extracted_translation_table, on = key_language],
+          extracted_translation_table,
+          use.names = TRUE,
+          fill = TRUE
+        )
       }
     } else {
-      extracted_translation_table[, (translated_languages) := .("")]
+      extracted_translation_table[, (translated_languages) := .(placeholder)]
     }
   }
 
-  # replace NAs with empty strings
-  for (i in seq_len(ncol(extracted_translation_table))){
-    set(extracted_translation_table, which(is.na(extracted_translation_table[[i]])), i, "")
+  # replace NAs with placeholder
+  for (i in seq_len(ncol(extracted_translation_table))) {
+    set(extracted_translation_table,
+        which(is.na(extracted_translation_table[[i]])),
+        i,
+        placeholder)
   }
 
   return(extracted_translation_table)
@@ -114,21 +157,28 @@ prepare_translation_table <- function(key_expressions,
 #' @importFrom jsonlite write_json
 #' @param key_language character specifying the language key code of the key_expressions
 #' @param translated_languages character vector specifying the key codes of the translated languages
+#' @param placeholder character specifying a placeholder for otherwise empty values of translated_languages
 #' @param update logical. If TRUE, the output updates the existing translation file. If FALSE, any existing file of the name is overwritten.
 #' @keywords internal
 save_to_json <- function(key_expressions,
                          output_path = NULL,
                          key_language = "key",
                          translated_languages = c("language_code_1", "language_code_2"),
+                         placeholder = "",
                          update = TRUE) {
-  if (is.null(output_path)) {output_path <- "translation.json"}
+  if (is.null(output_path)) {
+    output_path <- "translation.json"
+  }
 
-  extracted_translation_table <- prepare_translation_table(key_expressions,
-                                                           output_path,
-                                                           type = "json",
-                                                           key_language,
-                                                           translated_languages,
-                                                           update)
+  extracted_translation_table <- prepare_translation_table(
+    key_expressions,
+    output_path,
+    type = "json",
+    key_language,
+    translated_languages,
+    placeholder,
+    update
+  )
 
   list_to_save <- list(
     languages = c(key_language, translated_languages),
@@ -147,35 +197,46 @@ save_to_json <- function(key_expressions,
 #' @param output_path character with path to output directory
 #' @param key_language character specifying the language key code of the key_expressions
 #' @param translated_languages character vector specifying the key codes of the translated languages
+#' @param placeholder character specifying a placeholder for otherwise empty values of translated_languages
 #' @param update logical. If TRUE, the output updates the existing translation file. If FALSE, any existing file of the name is overwritten.
 #' @import utils
 #' @import data.table
 #' @keywords internal
 save_to_csv <- function(key_expressions,
-                         output_path = NULL,
-                         key_language = "key",
-                         translated_languages = c("language_code_1", "language_code_2"),
-                         update = TRUE) {
-  ..write_columns <- NULL # avoid NOTE "no visible binding for global variable"
-  if (is.null(output_path)) {output_path <- "."}
-  extracted_translation_table <- prepare_translation_table(key_expressions,
-                                                           output_path,
-                                                           type = "csv",
-                                                           key_language,
-                                                           translated_languages,
-                                                           update)
+                        output_path = NULL,
+                        key_language = "key",
+                        translated_languages = c("language_code_1", "language_code_2"),
+                        placeholder = "",
+                        update = TRUE) {
+  # ..write_columns <- NULL # avoid NOTE "no visible binding for global variable"
+  if (is.null(output_path)) {
+    output_path <- "."
+  }
+  extracted_translation_table <- prepare_translation_table(
+    key_expressions,
+    output_path,
+    type = "csv",
+    key_language,
+    translated_languages,
+    placeholder,
+    update
+  )
 
-  for(translated_language in translated_languages){
+  for (translated_language in translated_languages) {
     target_csv_file <- paste0("translation_", translated_language, ".csv")
     write_columns <- c(key_language, translated_language)
-    fwrite(extracted_translation_table[, ..write_columns], file = file.path(output_path, target_csv_file), row.names = FALSE)
+    fwrite(
+      extracted_translation_table[, ..write_columns],
+      file = file.path(output_path, target_csv_file),
+      row.names = FALSE
+    )
   }
 }
 
 #' Create translation file
 #'
 #' Auxiliary shiny.i18n function that searches for all key expressions (e.g.
-#' surrounded by \code{i18n$t()} tag in the provided scripts).
+#' surrounded by \code{i18n$t()} tag in the script).
 #'
 #' @param path character vector of one or more paths of the file(s) that needs to be inspected for
 #' key translations
@@ -187,27 +248,55 @@ save_to_csv <- function(key_expressions,
 #' For type = "csv" a output path (directory) is expected and files with the pattern "translate_language_code.csv" are saved to disk.
 #' @param key_language character specifying the language key code of the key expressions
 #' @param translated_languages character vector specifying the key codes of the translated languages
+#' @param placeholder character specifying a placeholder for otherwise empty values of translated_languages
 #' @param update logical. If TRUE, the output updates the existing translation file. If FALSE, any existing file of the name is overwritten.
 #'
 #' @export
-create_translation_file <- function(path, type = "json", handle = "i18n",
-                                    output = NULL, key_language = "key", translated_languages = c("language_code_1", "language_code_2"), update = TRUE) {
+create_translation_file <- function(path,
+                                    type = "json",
+                                    handle = "i18n",
+                                    output = NULL,
+                                    key_language = "key",
+                                    translated_languages = c("language_code_1", "language_code_2"),
+                                    placeholder = "",
+                                    update = TRUE) {
+  if (key_language %in% translated_languages) {
+    translated_languages <- setdiff(translated_languages, key_language)
+  }
   file_source <- unlist(lapply(path, stri_read_lines), use.names = FALSE)
   key_expressions <- extract_key_expressions(file_source, handle)
-  switch(type,
-         json = save_to_json(key_expressions, output, key_language, translated_languages),
-         csv = save_to_csv(key_expressions, output),
-         stop("'type' of output not recognized, check docs!")
+  switch(
+    type,
+    json = save_to_json(
+      key_expressions,
+      output,
+      key_language,
+      translated_languages,
+      placeholder,
+      update
+    ),
+    csv = save_to_csv(
+      key_expressions,
+      output,
+      key_language,
+      translated_languages,
+      placeholder,
+      update
+    ),
+    stop("'type' of output not recognized, check docs!")
   )
 }
 
 #' Create translation file addin
 #' @keywords internal
 create_translation_addin <- function() {
-  rstudioapi::showDialog("shiny.i18n", "This extension searches for 'i18n$t'
+  rstudioapi::showDialog(
+    "shiny.i18n",
+    "This extension searches for 'i18n$t'
                          wrappers in your file and creates an example of
                          a translation file for you. For more customized
-                         behaviour use 'create_translation_file' function.")
+                         behaviour use 'create_translation_file' function."
+  )
   path <- rstudioapi::getActiveDocumentContext()$path
   if (nchar(path) == 0) {
     rstudioapi::showDialog("TODOr", "No active document detected.")
